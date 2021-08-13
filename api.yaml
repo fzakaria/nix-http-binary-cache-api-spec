@@ -27,7 +27,7 @@ paths:
       parameters:
       - name: storePathHash
         in: path
-        description: ID of pet to return
+        description: cryptographic hash of the store path
         required: true
         schema:
           type: string
