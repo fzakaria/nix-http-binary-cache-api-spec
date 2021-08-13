@@ -67,29 +67,71 @@ components:
   schemas:
     NixCacheInfo:
       type: object
+      required:
+        - StoreDir
+        - WantMassQuery
+        - Priority
       properties:
         StoreDir:
           type: string
+          description: The Nix store path that was used to generate the derivations.
+          example: /nix/store
         WantMassQuery:
           type: integer
+          description: Whether this cache supports bulk queries
+                       https://github.com/NixOS/nix/issues/1503
+        Priority:
+          type: integer
+          description: The priority with which to check and download from substituters
     NarInfo:
       type: object
+      required:
+        - StorePath
+        - URL
+        - FileHash
+        - NarHash
+        - FileSize
+        - NarSize
+        - Deriver
+        - Sig
+        - References
       properties:
         StorePath:
           type: string
+          description: The store path that will be created on the system
+          example: /nix/store/p4pclmv1gyja5kzc26npqpia1qqxrf0l-ruby-2.7.3
+        URL:
+          type: string
+          description: The URL to fetch the NAR
+          example: nar/1w1fff338fvdw53sqgamddn1b2xgds473pv6y13gizdbqjv4i5p3.nar.xz
         Compression:
           type: string
+          description: The name of the compression format
+          example: xz
         FileHash:
           type: string
+          description: The cryptographic hash of the file to download in base32
+          example: sha256:1w1fff338fvdw53sqgamddn1b2xgds473pv6y13gizdbqjv4i5p3
+        FileSize:
+          type: integer
+          minimum: 0
         NarHash:
           type: string
+          description: The cryptographic hash of the NAR (decompressed) in base 32
+          example: sha256:1impfw8zdgisxkghq9a3q7cn7jb9zyzgxdydiamp8z2nlyyl0h5h
         NarSize:
           type: integer
+          minimum: 0
         Deriver:
           type: string
+          example: bidkcs01mww363s4s7akdhbl6ws66b0z-ruby-2.7.3.drv
         References:
           type: array
           items:
             type: string
+          example: 0d71ygfwbmy1xjlbj1v027dfmy9cqavy-libffi-3.3
+          description: Store paths for direct runtime dependencies
         Sig:
           type: string
+          description: The computed signature to validate the content
+          example: cache.nixos.org-1:GrGV/Ls10TzoOaCnrcAqmPbKXFLLSBDeGNh5EQGKyuGA4K1wv1LcRVb6/sU+NAPK8lDiam8XcdJzUngmdhfTBQ==
