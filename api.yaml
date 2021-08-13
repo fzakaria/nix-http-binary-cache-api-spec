@@ -1,0 +1,95 @@
+openapi: 3.0.1
+info:
+  title: Nix Binary Cache
+  description: This is a specification for a Nix binary cache
+  version: 1.0.0
+externalDocs:
+  description: Find out more about Nix & NixOS
+  url: http://nixos.org/
+servers:
+- url: https://cache.nixos.org/
+paths:
+  /nix-cache-info:
+    get:
+      summary: Get information about this Nix binary cache
+      operationId: getNixCacheInfo
+      responses:
+        200:
+          description: successful operation
+          content:
+            application/octet-stream:
+              schema:
+                $ref: '#/components/schemas/NixCacheInfo'
+  /{storePathHash}.narinfo:
+    get:
+      summary: Get the NarInfo for a particular path
+      operationId: getNarInfo
+      parameters:
+      - name: storePathHash
+        in: path
+        description: ID of pet to return
+        required: true
+        schema:
+          type: string
+      responses:
+        200:
+          description: successful operation
+          content:
+            text/x-nix-narinfo:
+              schema:
+                $ref: '#/components/schemas/NarInfo'
+        404:
+          description: Not found
+          content: {}
+  /nar/{fileHash}.nar.xz:
+    get:
+      summary: Get the compressed NAR object
+      operationId: getCompressedNar
+      parameters:
+      - name: fileHash
+        in: path
+        description: The base32 cryptographic hash of the NAR.
+        required: true
+        schema:
+          type: string
+      responses:
+        200:
+          description: successful operation
+          content:
+            application/x-nix-nar:
+              schema:
+                type: string
+                format: binary
+        404:
+          description: Not found
+          content: {}
+components:
+  schemas:
+    NixCacheInfo:
+      type: object
+      properties:
+        StoreDir:
+          type: string
+        WantMassQuery:
+          type: integer
+    NarInfo:
+      type: object
+      properties:
+        StorePath:
+          type: string
+        Compression:
+          type: string
+        FileHash:
+          type: string
+        NarHash:
+          type: string
+        NarSize:
+          type: integer
+        Deriver:
+          type: string
+        References:
+          type: array
+          items:
+            type: string
+        Sig:
+          type: string
