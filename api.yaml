@@ -29,6 +29,7 @@ paths:
         in: path
         description: cryptographic hash of the store path
         required: true
+        example: p4pclmv1gyja5kzc26npqpia1qqxrf0l
         schema:
           type: string
       responses:
@@ -41,7 +42,7 @@ paths:
         404:
           description: Not found
           content: {}
-  /nar/{fileHash}.nar.xz:
+  /nar/{fileHash}.nar.{compression}:
     get:
       summary: Get the compressed NAR object
       operationId: getCompressedNar
@@ -50,6 +51,14 @@ paths:
         in: path
         description: The base32 cryptographic hash of the NAR.
         required: true
+        example: 1w1fff338fvdw53sqgamddn1b2xgds473pv6y13gizdbqjv4i5p3
+        schema:
+          type: string
+      - name: compression
+        in: path
+        description: The compression algorithm listed in the NarInfo object
+        required: true
+        example: xz
         schema:
           type: string
       responses:
