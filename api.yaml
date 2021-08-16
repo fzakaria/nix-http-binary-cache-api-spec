@@ -7,7 +7,10 @@ externalDocs:
   description: Find out more about Nix & NixOS
   url: http://nixos.org/
 servers:
+- url: https://nix-cache.s3.amazonaws.com
+  description: The raw S3 bucket to fetch the Nix binary cache info
 - url: https://cache.nixos.org/
+  description: The CDN fronted Nix binary cache
 paths:
   /nix-cache-info:
     get:
@@ -17,10 +20,26 @@ paths:
         200:
           description: successful operation
           content:
-            application/octet-stream:
+            text/plain:
               schema:
                 $ref: '#/components/schemas/NixCacheInfo'
   /{storePathHash}.narinfo:
+    head:
+      summary: Check if a particular path exists quickly
+      operationId: doesNarInfoExist
+      parameters:
+      - name: storePathHash
+        in: path
+        description: cryptographic hash of the store path
+        required: true
+        example: p4pclmv1gyja5kzc26npqpia1qqxrf0l
+        schema:
+          type: string
+      responses:
+        200:
+          description: successful operation
+        404:
+          description: Not found
     get:
       summary: Get the NarInfo for a particular path
       operationId: getNarInfo
@@ -42,6 +61,9 @@ paths:
         404:
           description: Not found
           content: {}
+  # Consider using OpenAPI Links here instead
+  # this path is dictated by the NarInfo for the particular entry.
+  # see: https://swagger.io/docs/specification/links/
   /nar/{fileHash}.nar.{compression}:
     get:
       summary: Get the compressed NAR object
@@ -61,6 +83,7 @@ paths:
         example: xz
         schema:
           type: string
+          enum: [xz, bzip2]
       responses:
         200:
           description: successful operation
@@ -74,6 +97,7 @@ paths:
           content: {}
 components:
   schemas:
+    # see: https://releases.nixos.org/nix/nix-1.11.9/manual/index.html#idm140737316141296
     NixCacheInfo:
       type: object
       required:
@@ -83,15 +107,25 @@ components:
       properties:
         StoreDir:
           type: string
-          description: The Nix store path that was used to generate the derivations.
+          description: The path of the Nix store to which this binary cache applies.
+                       Binaries are not relocatable — a binary built for /nix/store won’t generally work in /home/alice/store
+                       — so to prevent binaries from being used in a wrong store, a binary cache is only used if its StoreDir
+                       matches the local Nix configuration. The default is /nix/store.
           example: /nix/store
         WantMassQuery:
           type: integer
-          description: Whether this cache supports bulk queries
-                       https://github.com/NixOS/nix/issues/1503
+          description: Query operations such as nix-env -qas can cause thousands of cache queries,
+                       and thus thousands of HTTP requests, to determine which packages are available in binary form.
+                       While these requests are small, not every server may appreciate a potential onslaught of queries.
+                       If WantMassQuery is set to 0 (default), “mass queries” such as nix-env -qas will skip this cache.
+                       Thus a package may appear not to have a binary substitute. However, the binary will still be used
+                       when you actually install the package. If WantMassQuery is set to 1, mass queries will use this cache.
         Priority:
           type: integer
-          description: The priority with which to check and download from substituters
+          description: Each binary cache has a priority (defaulting to 50).
+                       Binary caches are checked for binaries in order of ascending priority;
+                       thus a higher number denotes a lower priority.
+                       The binary cache https://cache.nixos.org has priority 40.
     NarInfo:
       type: object
       required:
@@ -101,21 +135,20 @@ components:
         - NarHash
         - FileSize
         - NarSize
-        - Deriver
         - Sig
         - References
       properties:
         StorePath:
           type: string
-          description: The store path that will be created on the system
+          description: The full store path, including the name part (e.g., glibc-2.7). It must match the requested store path.
           example: /nix/store/p4pclmv1gyja5kzc26npqpia1qqxrf0l-ruby-2.7.3
         URL:
           type: string
-          description: The URL to fetch the NAR
+          description: The URL of the NAR, relative to the binary cache URL.
           example: nar/1w1fff338fvdw53sqgamddn1b2xgds473pv6y13gizdbqjv4i5p3.nar.xz
         Compression:
           type: string
-          description: The name of the compression format
+          description: The compression method; either xz or bzip2.
           example: xz
         FileHash:
           type: string
@@ -133,7 +166,12 @@ components:
           minimum: 0
         Deriver:
           type: string
+          description: The deriver of the store path, without the Nix store prefix. This field is optional.
           example: bidkcs01mww363s4s7akdhbl6ws66b0z-ruby-2.7.3.drv
+        System:
+          type: string
+          description: The Nix platform type of this binary, if known. This field is optional.
+          example: linux-x86-64
         References:
           type: array
           items:
@@ -142,5 +180,8 @@ components:
           description: Store paths for direct runtime dependencies
         Sig:
           type: string
-          description: The computed signature to validate the content
+          description: A signature of the the form key-name:sig, where key-name is the symbolic name
+                       of the key pair used to sign and verify the cache (e.g. cache.example.org-1),
+                       and sig is the actual signature, computed over the StorePath, NarHash, NarSize
+                       and References fields using the Ed25519 public-key signature system.
           example: cache.nixos.org-1:GrGV/Ls10TzoOaCnrcAqmPbKXFLLSBDeGNh5EQGKyuGA4K1wv1LcRVb6/sU+NAPK8lDiam8XcdJzUngmdhfTBQ==
