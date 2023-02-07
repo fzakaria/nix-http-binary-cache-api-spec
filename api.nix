@@ -4,7 +4,7 @@ let
   compression.example       = "xz";
   compression.name          = "compression";
   compression.required      = true;
-  compression.schema.enum   = ["xz"  "bzip2"];
+  compression.schema.enum   = ["xz" "bz2" "zst" "lzip" "lz4" "br"];
   compression.schema.type   = "string";
   deriver."in"              = "path";
   deriver.description       = "The full name of the deriver";
@@ -169,8 +169,8 @@ in {
       "References"
     ];
     NarInfo.properties = {
-      Compression.description = "The compression method; either xz or bzip2.";
-      Compression.example     = "xz";
+      Compression.description = "The compression method; xz, bzip2, zstd, lzip, lz4, br.";
+      Compression.example     = "zstd";
       Compression.type        = "string";
       Deriver.description     = "The deriver of the store path, without the Nix store prefix. This field is optional.";
       Deriver.example         = "bidkcs01mww363s4s7akdhbl6ws66b0z-ruby-2.7.3.drv";

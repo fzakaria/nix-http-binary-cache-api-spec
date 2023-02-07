@@ -50,8 +50,8 @@ components:
     NarInfo:
       properties:
         Compression:
-          description: The compression method; either xz or bzip2.
-          example: xz
+          description: The compression method; xz, bzip2, zstd, lzip, lz4, br.
+          example: zstd
           type: string
         Deriver:
           description: The deriver of the store path, without the Nix store prefix. This field is optional.
@@ -201,7 +201,11 @@ paths:
           schema:
             enum:
               - xz
-              - bzip2
+              - bz2
+              - zst
+              - lzip
+              - lz4
+              - br
             type: string
       responses:
         "200":
