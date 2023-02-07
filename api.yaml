@@ -1,234 +1,102 @@
-openapi: 3.0.1
-info:
-  title: Nix Binary Cache
-  description: This is a specification for a Nix binary cache
-  version: 1.0.0
-externalDocs:
-  description: Find out more about Nix & NixOS
-  url: http://nixos.org/
-servers:
-- url: https://nix-cache.s3.amazonaws.com
-  description: The raw S3 bucket to fetch the Nix binary cache info
-- url: https://cache.nixos.org/
-  description: The CDN fronted Nix binary cache
-paths:
-  /nix-cache-info:
-    get:
-      summary: Get information about this Nix binary cache
-      operationId: getNixCacheInfo
-      responses:
-        200:
-          description: successful operation
-          content:
-            text/plain:
-              schema:
-                $ref: '#/components/schemas/NixCacheInfo'
-  /log/{deriver}:
-    get:
-      summary: Get the build logs for a particular deriver.
-              This path exists if this binary cache is hydrated from Hydra.
-      operationId: getDeriverBuildLog
-      parameters:
-      - name: deriver
-        in: path
-        description: The full name of the deriver
-        required: true
-        example: bidkcs01mww363s4s7akdhbl6ws66b0z-ruby-2.7.3.drv 
-        schema:
-          type: string
-      responses:
-        200:
-          description: successful operation. This is usually compressed such as with brotli.
-          content:
-            text/plain:
-              schema:
-                type: string
-                example: |
-                        unpacking sources
-                        unpacking source archive /nix/store/x3ir0dv32r6603df7myx14s308sfsh0c-source
-                        source root is source
-                        patching sources
-                        applying patch /nix/store/073hhn64isdlfbsjyr0sw78gyr9g7llg-source/patches/ruby/2.7/head/railsexpress/01-fix-broken-tests-caused-by-ad.patch
-                        patching file spec/ruby/core/process/groups_spec.rb
-                        patching file spec/ruby/library/etc/getgrgid_spec.rb
-                        patching file spec/ruby/library/etc/struct_group_spec.rb
-                        patching file test/ruby/test_process.rb
-                        applying patch /nix/store/073hhn64isdlfbsjyr0sw78gyr9g7llg-source/patches/ruby/2.7/head/railsexpress/02-improve-gc-stats.pa
-        404:
-          description: Not found
-          content: {}
-  /{storePathHash}.ls:
-    get:
-      summary: Get the file listings for a particular store-path (once you expand the NAR).
-      operationId: getNarFileListing
-      parameters:
-      - name: storePathHash
-        in: path
-        description: cryptographic hash of the store path
-        required: true
-        example: p4pclmv1gyja5kzc26npqpia1qqxrf0l
-        schema:
-          type: string
-      responses:
-        200:
-          description: successful operation. This is usually compressed such as with brotli.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FileListing'
-        404:
-          description: Not found
-          content: {}
-  /{storePathHash}.narinfo:
-    head:
-      summary: Check if a particular path exists quickly
-      operationId: doesNarInfoExist
-      parameters:
-      - name: storePathHash
-        in: path
-        description: cryptographic hash of the store path
-        required: true
-        example: p4pclmv1gyja5kzc26npqpia1qqxrf0l
-        schema:
-          type: string
-      responses:
-        200:
-          description: successful operation
-        404:
-          description: Not found
-    get:
-      summary: Get the NarInfo for a particular path
-      operationId: getNarInfo
-      parameters:
-      - name: storePathHash
-        in: path
-        description: cryptographic hash of the store path
-        required: true
-        example: p4pclmv1gyja5kzc26npqpia1qqxrf0l
-        schema:
-          type: string
-      responses:
-        200:
-          description: successful operation
-          content:
-            text/x-nix-narinfo:
-              schema:
-                $ref: '#/components/schemas/NarInfo'
-        404:
-          description: Not found
-          content: {}
-  # Consider using OpenAPI Links here instead
-  # this path is dictated by the NarInfo for the particular entry.
-  # see: https://swagger.io/docs/specification/links/
-  /nar/{fileHash}.nar.{compression}:
-    get:
-      summary: Get the compressed NAR object
-      operationId: getCompressedNar
-      parameters:
-      - name: fileHash
-        in: path
-        description: The base32 cryptographic hash of the NAR.
-        required: true
-        example: 1w1fff338fvdw53sqgamddn1b2xgds473pv6y13gizdbqjv4i5p3
-        schema:
-          type: string
-      - name: compression
-        in: path
-        description: The compression algorithm listed in the NarInfo object
-        required: true
-        example: xz
-        schema:
-          type: string
-          enum: [xz, bzip2]
-      responses:
-        200:
-          description: successful operation
-          content:
-            application/x-nix-nar:
-              schema:
-                type: string
-                format: binary
-        404:
-          description: Not found
-          content: {}
 components:
   schemas:
-    # see: https://releases.nixos.org/nix/nix-1.11.9/manual/index.html#idm140737316141296
-    NixCacheInfo:
-      type: object
-      required:
-        - StoreDir
-        - WantMassQuery
-        - Priority
-      properties:
-        StoreDir:
-          type: string
-          description: The path of the Nix store to which this binary cache applies.
-                       Binaries are not relocatable — a binary built for /nix/store won’t generally work in /home/alice/store
-                       — so to prevent binaries from being used in a wrong store, a binary cache is only used if its StoreDir
-                       matches the local Nix configuration. The default is /nix/store.
-          example: /nix/store
-        WantMassQuery:
-          type: integer
-          description: Query operations such as nix-env -qas can cause thousands of cache queries,
-                       and thus thousands of HTTP requests, to determine which packages are available in binary form.
-                       While these requests are small, not every server may appreciate a potential onslaught of queries.
-                       If WantMassQuery is set to 0 (default), “mass queries” such as nix-env -qas will skip this cache.
-                       Thus a package may appear not to have a binary substitute. However, the binary will still be used
-                       when you actually install the package. If WantMassQuery is set to 1, mass queries will use this cache.
-        Priority:
-          type: integer
-          description: Each binary cache has a priority (defaulting to 50).
-                       Binary caches are checked for binaries in order of ascending priority;
-                       thus a higher number denotes a lower priority.
-                       The binary cache https://cache.nixos.org has priority 40.
-    FileListingEntryType:
-      type: string
-      enum: [directory, regular]
-    FileListingDirectoryEntry:
-      type: object
-      required:
-        - type
-        - entries
-      properties:
-        type:
-          $ref: '#/components/schemas/FileListingEntryType'
-        entries:
-          type: object
-          additionalProperties:
-            oneOf:
-              - $ref: '#/components/schemas/FileListingFileEntry'
-              - $ref: '#/components/schemas/FileListingDirectoryEntry'
-    FileListingFileEntry:
-      type: object
-      required:
-        - type
-        - size
-        - narOffset
-      properties:
-        type:
-          $ref: '#/components/schemas/FileListingEntryType'
-        size:
-          type: integer
-          description: The size of the file
-        narOffset:
-          type: integer
-          description: The offset in bytes within the NAR
-        executable:
-          type: boolean
-          description: Whether this file should be made executable
     FileListing:
-      type: object
       properties:
-        version:
-          type: integer
-          description: The version of this current format
         root:
           oneOf:
             - $ref: '#/components/schemas/FileListingDirectoryEntry'
             - $ref: '#/components/schemas/FileListingFileEntry'
-    NarInfo:
+        version:
+          description: The version of this current format
+          type: integer
       type: object
+    FileListingDirectoryEntry:
+      properties:
+        entries:
+          additionalProperties:
+            oneOf:
+              - $ref: '#/components/schemas/FileListingFileEntry'
+              - $ref: '#/components/schemas/FileListingDirectoryEntry'
+          type: object
+        type:
+          $ref: '#/components/schemas/FileListingEntryType'
+      required:
+        - type
+        - entries
+      type: object
+    FileListingEntryType:
+      enum:
+        - directory
+        - regular
+      type: string
+    FileListingFileEntry:
+      properties:
+        executable:
+          description: Whether this file should be made executable
+          type: boolean
+        narOffset:
+          description: The offset in bytes within the NAR
+          type: integer
+        size:
+          description: The size of the file
+          type: integer
+        type:
+          $ref: '#/components/schemas/FileListingEntryType'
+      required:
+        - type
+        - size
+        - narOffset
+      type: object
+    NarInfo:
+      properties:
+        Compression:
+          description: The compression method; either xz or bzip2.
+          example: xz
+          type: string
+        Deriver:
+          description: The deriver of the store path, without the Nix store prefix. This field is optional.
+          example: bidkcs01mww363s4s7akdhbl6ws66b0z-ruby-2.7.3.drv
+          type: string
+        FileHash:
+          description: The cryptographic hash of the file to download in base32
+          example: sha256:1w1fff338fvdw53sqgamddn1b2xgds473pv6y13gizdbqjv4i5p3
+          type: string
+        FileSize:
+          minimum: 0
+          type: integer
+        NarHash:
+          description: The cryptographic hash of the NAR (decompressed) in base 32
+          example: sha256:1impfw8zdgisxkghq9a3q7cn7jb9zyzgxdydiamp8z2nlyyl0h5h
+          type: string
+        NarSize:
+          minimum: 0
+          type: integer
+        References:
+          description: Store paths for direct runtime dependencies
+          example: 0d71ygfwbmy1xjlbj1v027dfmy9cqavy-libffi-3.3
+          items:
+            type: string
+          type: array
+        Sig:
+          description: |-
+            A signature of the the form key-name:sig, where key-name is the symbolic name
+            of the key pair used to sign and verify the cache (e.g. cache.example.org-1),
+            and sig is the actual signature, computed over the StorePath, NarHash, NarSize
+            and References fields using the Ed25519 public-key signature system.
+          example: cache.nixos.org-1:GrGV/Ls10TzoOaCnrcAqmPbKXFLLSBDeGNh5EQGKyuGA4K1wv1LcRVb6/sU+NAPK8lDiam8XcdJzUngmdhfTBQ==
+          type: string
+        StorePath:
+          description: The full store path, including the name part (e.g., glibc-2.7). It must match the requested store path.
+          example: /nix/store/p4pclmv1gyja5kzc26npqpia1qqxrf0l-ruby-2.7.3
+          type: string
+        System:
+          description: The Nix platform type of this binary, if known. This field is optional.
+          example: linux-x86-64
+          type: string
+        URL:
+          description: The URL of the NAR, relative to the binary cache URL.
+          example: nar/1w1fff338fvdw53sqgamddn1b2xgds473pv6y13gizdbqjv4i5p3.nar.xz
+          type: string
       required:
         - StorePath
         - URL
@@ -238,51 +106,188 @@ components:
         - NarSize
         - Sig
         - References
+      type: object
+    NixCacheInfo:
       properties:
-        StorePath:
-          type: string
-          description: The full store path, including the name part (e.g., glibc-2.7). It must match the requested store path.
-          example: /nix/store/p4pclmv1gyja5kzc26npqpia1qqxrf0l-ruby-2.7.3
-        URL:
-          type: string
-          description: The URL of the NAR, relative to the binary cache URL.
-          example: nar/1w1fff338fvdw53sqgamddn1b2xgds473pv6y13gizdbqjv4i5p3.nar.xz
-        Compression:
-          type: string
-          description: The compression method; either xz or bzip2.
-          example: xz
-        FileHash:
-          type: string
-          description: The cryptographic hash of the file to download in base32
-          example: sha256:1w1fff338fvdw53sqgamddn1b2xgds473pv6y13gizdbqjv4i5p3
-        FileSize:
+        Priority:
+          description: |-
+            Each binary cache has a priority (defaulting to 50).
+            Binary caches are checked for binaries in order of ascending priority;
+            thus a higher number denotes a lower priority.
+            The binary cache https://cache.nixos.org has priority 40.
           type: integer
-          minimum: 0
-        NarHash:
+        StoreDir:
+          description: |-
+            The path of the Nix store to which this binary cache applies.
+            Binaries are not relocatable — a binary built for /nix/store won’t generally work in /home/alice/store
+            — so to prevent binaries from being used in a wrong store, a binary cache is only used if its StoreDir
+            matches the local Nix configuration. The default is /nix/store.
+          example: /nix/store
           type: string
-          description: The cryptographic hash of the NAR (decompressed) in base 32
-          example: sha256:1impfw8zdgisxkghq9a3q7cn7jb9zyzgxdydiamp8z2nlyyl0h5h
-        NarSize:
+        WantMassQuery:
+          description: |-
+            Query operations such as nix-env -qas can cause thousands of cache queries,
+            and thus thousands of HTTP requests, to determine which packages are available in binary form.
+            While these requests are small, not every server may appreciate a potential onslaught of queries.
+            If WantMassQuery is set to 0 (default), “mass queries” such as nix-env -qas will skip this cache.
+            Thus a package may appear not to have a binary substitute. However, the binary will still be used
+            when you actually install the package. If WantMassQuery is set to 1, mass queries will use this cache.
           type: integer
-          minimum: 0
-        Deriver:
-          type: string
-          description: The deriver of the store path, without the Nix store prefix. This field is optional.
+      required:
+        - StoreDir
+        - WantMassQuery
+        - Priority
+      type: object
+externalDocs:
+  description: Find out more about Nix & NixOS
+  url: http://nixos.org/
+info:
+  description: This is a specification for a Nix binary cache
+  title: Nix Binary Cache
+  version: 1.0.0
+openapi: 3.0.1
+paths:
+  /log/{deliver}:
+    get:
+      operationId: getDeriverBuildLog
+      parameters:
+        - description: The full name of the deriver
           example: bidkcs01mww363s4s7akdhbl6ws66b0z-ruby-2.7.3.drv
-        System:
-          type: string
-          description: The Nix platform type of this binary, if known. This field is optional.
-          example: linux-x86-64
-        References:
-          type: array
-          items:
+          in: path
+          name: deriver
+          required: true
+          schema:
             type: string
-          example: 0d71ygfwbmy1xjlbj1v027dfmy9cqavy-libffi-3.3
-          description: Store paths for direct runtime dependencies
-        Sig:
-          type: string
-          description: A signature of the the form key-name:sig, where key-name is the symbolic name
-                       of the key pair used to sign and verify the cache (e.g. cache.example.org-1),
-                       and sig is the actual signature, computed over the StorePath, NarHash, NarSize
-                       and References fields using the Ed25519 public-key signature system.
-          example: cache.nixos.org-1:GrGV/Ls10TzoOaCnrcAqmPbKXFLLSBDeGNh5EQGKyuGA4K1wv1LcRVb6/sU+NAPK8lDiam8XcdJzUngmdhfTBQ==
+      responses:
+        "200":
+          content:
+            text/plain:
+              schema:
+                example: |-
+                  unpacking sources
+                  unpacking source archive /nix/store/x3ir0dv32r6603df7myx14s308sfsh0c-source
+                  source root is source
+                  patching sources
+                  applying patch /nix/store/073hhn64isdlfbsjyr0sw78gyr9g7llg-source/patches/ruby/2.7/head/railsexpress/01-fix-broken-tests-caused-by-ad.patch
+                  patching file spec/ruby/core/process/groups_spec.rb
+                  patching file spec/ruby/library/etc/getgrgid_spec.rb
+                  patching file spec/ruby/library/etc/struct_group_spec.rb
+                  patching file test/ruby/test_process.rb
+                  applying patch /nix/store/073hhn64isdlfbsjyr0sw78gyr9g7llg-source/patches/ruby/2.7/head/railsexpress/02-improve-gc-stats.pa
+                type: string
+          description: successful operation. This is usually compressed such as with brotli.
+        "404":
+          content: {}
+          description: Not found
+      summary: |-
+        Get the build logs for a particular deriver.
+        This path exists if this binary cache is hydrated from Hydra.
+  /nar/{fileHash}.nar.{compression}:
+    get:
+      operationId: getCompressedNar
+      parameters:
+        - description: The base32 cryptographic hash of the NAR.
+          example: 1w1fff338fvdw53sqgamddn1b2xgds473pv6y13gizdbqjv4i5p3
+          in: path
+          name: fileHash
+          required: true
+          schema:
+            type: string
+        - description: The compression algorithm listed in the NarInfo object
+          example: xz
+          in: path
+          name: compression
+          required: true
+          schema:
+            enum:
+              - xz
+              - bzip2
+            type: string
+      responses:
+        "200":
+          content:
+            application/x-nix-nar:
+              schema:
+                format: binary
+                type: string
+          description: successful operation
+        "404":
+          content: {}
+          description: Not found
+      summary: Get the compressed NAR object
+  /nix-cache-info:
+    get:
+      operationId: getNixCacheInfo
+      responses:
+        "200":
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/NixCacheInfo'
+          description: successful operation
+      summary: Get information about this Nix binary cache
+  /{storePathHash}.ls:
+    get:
+      operationId: getNarFileListing
+      parameters:
+        - description: cryptographic hash of the store path
+          example: p4pclmv1gyja5kzc26npqpia1qqxrf0l
+          in: path
+          name: storePathHash
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileListing'
+          description: successful operation. This is usually compressed such as with brotli.
+        "404":
+          content: {}
+          description: Not found
+      summary: Get the file listings for a particular store-path (once you expand the NAR).
+  /{storePathHash}.narinfo:
+    get:
+      operationId: getNarInfo
+      parameters:
+        - description: cryptographic hash of the store path
+          example: p4pclmv1gyja5kzc26npqpia1qqxrf0l
+          in: path
+          name: storePathHash
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            text/x-nix-narinfo:
+              schema:
+                $ref: '#/components/schemas/NarInfo'
+          description: successful operation
+        "404":
+          content: {}
+          description: Not found
+      summary: Get the NarInfo for a particular path
+    head:
+      operationId: doesNarInfoExist
+      parameters:
+        - description: cryptographic hash of the store path
+          example: p4pclmv1gyja5kzc26npqpia1qqxrf0l
+          in: path
+          name: storePathHash
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: successful operation
+        "404":
+          description: Not found
+      summary: Check if a particular path exists quickly
+servers:
+  - description: The raw S3 bucket to fetch the Nix binary cache info
+    url: https://nix-cache.s3.amazonaws.com
+  - description: The CDN fronted Nix binary cache
+    url: https://cache.nixos.org/
