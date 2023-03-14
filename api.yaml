@@ -139,13 +139,13 @@ paths:
         example: xz
         schema:
           type: string
-            enum:
-              - br
-              - bz2
-              - lzip
-              - lz4
-              - zst
-              - xz
+          enum:
+            - br
+            - bz2
+            - lzip
+            - lz4
+            - zst
+            - xz
       responses:
         200:
           description: successful operation
@@ -255,8 +255,15 @@ components:
           example: nar/1w1fff338fvdw53sqgamddn1b2xgds473pv6y13gizdbqjv4i5p3.nar.xz
         Compression:
           type: string
-          description: The compression method; either xz or bzip2.
+          description: The compression method
           example: xz
+          enum:
+            - br
+            - bz2
+            - lzip
+            - lz4
+            - zst
+            - xz
         FileHash:
           type: string
           description: The cryptographic hash of the file to download in base32
